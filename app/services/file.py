@@ -6,7 +6,7 @@ import sys
 from typing import Optional
 
 from app.interfaces.errors.exceptions import NotFoundException, BadRequestException, AppException
-from app.models.file import FileReadResult
+from app.models.file import FileReadResult, FileWriteResult
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +71,72 @@ class FileService:
             content = content[:max_length] + "(truncated)"
 
         return FileReadResult(file_path=filepath, content=content)
+
+    @classmethod
+    async def write_file(
+            cls,
+            filepath: str,
+            content: str,
+            append: bool = False,
+            leading_newline: bool = False,
+            trailing_newline: bool = False,
+            sudo: bool = False,
+    ) -> FileWriteResult:
+        """根据传递的文件路径+内容向指定文件写入内容"""
+        try:
+            # 1.组装实际写入的内容
+            if leading_newline:
+                content = "\n" + content
+            if trailing_newline:
+                content = content + "\n"
+            # 2.判断是否是sudo权限并且非windows系统
+            if sudo and sys.platform != "win32":
+                # 3.使用命令的方式先向临时文件写入数据，计算追加模式
+                mode = ">>" if append else ">"
+                # 4.创建一个临时文件
+                temp_file = f"/tmp/file_write_{os.getpid()}.tmp"
+
+                # 5.创建一个内部函数使用asyncio创建新线程写入数据
+                def async_write_tmp_file() -> int:
+                    with open(temp_file, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    return len(content.encode("utf-8"))
+
+                # 6.使用asyncio创建子线程并写入
+                bytes_written = await asyncio.to_thread(async_write_tmp_file)
+                # 7.使用命令行将临时文件写入到目标文件中
+                command = f"sudo bash -c \"cat {temp_file} {mode} {filepath}\""
+                process = await asyncio.create_subprocess_shell(
+                    command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                # 8.等待子进程执行完毕
+                stdout, stderr = await process.communicate()
+                # 9.检测子进程是否正常执行
+                if process.returncode != 0:
+                    raise BadRequestException(f"文件内容写入失败: {stderr.decode()}")
+                # 10.清除下临时文件
+                os.unlink(temp_file)
+            else:
+                # 11.非sudo或者windows下使用python方式写入
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+                # 12.创建一个异步写入的函数
+                def async_write_file() -> int:
+                    write_mode = "a" if append else "w"
+                    with open(filepath, write_mode, encoding="utf-8") as f:
+                        return f.write(content)
+
+                # 13.使用asyncio创建一个子线程写入内容
+                bytes_written = await asyncio.to_thread(async_write_file)
+            return FileWriteResult(
+                filepath=filepath,
+                bytes_written=bytes_written,
+            )
+        except Exception as e:
+            # 14.根据不同的错误执行不同的操作
+            logger.error(f"文件内容写入失败: {str(e)}")
+            if isinstance(e, BadRequestException):
+                raise
+            raise AppException(f"文件内容写入失败: {str(e)}")
