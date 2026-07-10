@@ -9,13 +9,10 @@ import uuid
 from typing import Dict, Optional, List
 
 from app.interfaces.errors.exceptions import BadRequestException, AppException, NotFoundException
-from app.interfaces.schemas.shell import ShellWriteResult, ShellKillResult
 from app.models.shell import (
-    ShellExecResult,
     Shell,
     ConsoleRecord,
-    ShellWaitResult,
-    ShellViewResult,
+    ShellWaitResult, ShellReadResult, ShellExecuteResult, ShellWriteResult, ShellKillResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,7 +126,7 @@ class ShellService:
             )
         return clean_console_records
 
-    async def wait_for_process(self, session_id: str, seconds: Optional[int] = None) -> ShellWaitResult:
+    async def wait_process(self, session_id: str, seconds: Optional[int] = None) -> ShellWaitResult:
         """传递会话id+时间等待子进程结束"""
         # 1.判断下传递的会话是否存在
         logger.debug(f"正在Shell会话中等待进程: {session_id}, 超时时间: {seconds}s")
@@ -158,7 +155,7 @@ class ShellService:
             logger.error(f"Shell会话进程等待过程出错: {str(e)}")
             raise AppException(f"Shell会话进程等待过程出错: {str(e)}")
 
-    async def view_shell(self, session_id: str, console: bool = False) -> ShellViewResult:
+    async def read_shell_output(self, session_id: str, console: bool = False) -> ShellReadResult:
         """根据传递的会话id+是否输出控制台会话记录获取Shell命令结果"""
         # 1.判断下传递的会话是否存在
         logger.debug(f"查看Shell会话内容: {session_id}")
@@ -175,7 +172,7 @@ class ShellService:
             console_records = self.get_console_records(session_id)
         else:
             console_records = []
-        return ShellViewResult(
+        return ShellReadResult(
             session_id=session_id,
             output=clean_output,
             console_records=console_records,
@@ -186,7 +183,7 @@ class ShellService:
             session_id: str,
             exec_dir: str,
             command: str,
-    ) -> ShellExecResult:
+    ) -> ShellExecuteResult:
         """传递会话id+执行目录+命令在沙箱中执行后返回"""
         # 1.记录日志并判断执行目录是否存在
         logger.info(f"正在会话 {session_id} 中执行命令: {command}")
@@ -249,13 +246,13 @@ class ShellService:
             try:
                 # 13.尝试等待子进程执行(最多等待10s, 需给Windows下powershell启动开销留出余量)
                 logger.debug(f"正在等待会话中的进程完成: {session_id}")
-                wait_result = await self.wait_for_process(session_id, seconds=10)
+                wait_result = await self.wait_process(session_id, seconds=10)
                 # 14.判断返回代码是否非空(已结束)则同步返回执行结果
                 if wait_result.returncode is not None:
                     # 15.记录日志并查看结果
                     logger.debug(f"Shell会话进程已结束, 代码: {wait_result.returncode}")
-                    view_result = await self.view_shell(session_id)
-                    return ShellExecResult(
+                    view_result = await self.read_shell_output(session_id)
+                    return ShellExecuteResult(
                         session_id=session_id,
                         command=command,
                         status="completed",
@@ -270,7 +267,7 @@ class ShellService:
                 # 17.其它异常忽略并让程序继续进行
                 logger.warning(f"等待进程时出现异常: {str(e)}")
                 pass
-            return ShellExecResult(
+            return ShellExecuteResult(
                 session_id=session_id,
                 command=command,
                 status="running",
@@ -283,7 +280,7 @@ class ShellService:
                 data={"session_id": session_id, "command": command},
             )
 
-    async def write_to_process(self, session_id: str, input_text: str, press_enter: bool) -> ShellWriteResult:
+    async def write_shell_input(self, session_id: str, input_text: str, press_enter: bool) -> ShellWriteResult:
         """根据传递的数据向指定子进程写入数据"""
         # 1.判断下传递的会话是否存在
         logger.debug(f"写入Shell会话中的子进程: {session_id}, 是否按下回车键: {press_enter}")

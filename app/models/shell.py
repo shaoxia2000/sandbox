@@ -28,17 +28,28 @@ class ShellWaitResult(BaseModel):
     returncode: int = Field(..., description="子进程返回代码")
 
 
-class ShellViewResult(BaseModel):
+class ShellReadResult(BaseModel):
     """Shell命令结果模型"""
     session_id: str = Field(..., description="Shell会话id")
     output: str = Field(..., description="Shell会话输出内容")
     console_records: List[ConsoleRecord] = Field(default_factory=list, description="控制台记录")
 
 
-class ShellExecResult(BaseModel):
+class ShellExecuteResult(BaseModel):
     """Shell命令执行结果"""
     session_id: str = Field(..., description="Shell会话id")
     command: str = Field(..., description="执行命令")
     status: str = Field(..., description="命令执行状态")
     returncode: Optional[int] = Field(default=None, description="进程返回代码，只有进程结束时才有值")
     output: Optional[str] = Field(default=None, description="进程执行结果，只有进程结束时才有值")
+
+
+class ShellWriteResult(BaseModel):
+    """Shell命令写入结果模型"""
+    status: str = Field(..., description="写入状态")
+
+
+class ShellKillResult(BaseModel):
+    """Shell命令关闭结果"""
+    status: str = Field(..., description="进程状态")
+    returncode: int = Field(..., description="进程返回状态")
