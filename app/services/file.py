@@ -1,8 +1,6 @@
 import asyncio
-import locale
 import logging
 import os.path
-import sys
 from typing import Optional
 
 from app.interfaces.errors.exceptions import NotFoundException, BadRequestException, AppException
@@ -13,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 class FileService:
     """文件沙箱服务"""
+
+    def __init__(self) -> None:
+        pass
 
     @classmethod
     async def read_file(
@@ -28,10 +29,10 @@ class FileService:
         if not os.path.exists(filepath) and not sudo:
             logger.error(f"要读取的文件不存在或无权限: {filepath}")
             raise NotFoundException(f"要读取的文件不存在或无权限: {filepath}")
-        # 2.获取系统编码 (开发和生产环境都是Linux这步可以省略)
-        encoding = locale.getpreferredencoding() if sys.platform == "win32" else "utf-8"
-        # 3.判断是否提供sudo+非windows系统，如果是则使用命令行的方式读取文件
-        if sudo and sys.platform != "win32":
+        # 2.ubuntu系统下统一使用utf-8编码
+        encoding = "utf-8"
+        # 3.判断是否提供sudo, 如果是sudo系统则使用命令行
+        if sudo:
             # 4.使用sudo cat命令读取文件内容
             command = f"sudo cat '{filepath}'"
             process = await asyncio.create_subprocess_shell(
@@ -89,8 +90,8 @@ class FileService:
                 content = "\n" + content
             if trailing_newline:
                 content = content + "\n"
-            # 2.判断是否是sudo权限并且非windows系统
-            if sudo and sys.platform != "win32":
+            # 2.判断是否是sudo权限, 如果是则使用命令行的形式先写入一个缓存文件，然后将缓存文件覆盖原始文件
+            if sudo:
                 # 3.使用命令的方式先向临时文件写入数据，计算追加模式
                 mode = ">>" if append else ">"
                 # 4.创建一个临时文件

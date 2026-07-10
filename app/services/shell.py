@@ -1,13 +1,10 @@
 import asyncio
 import codecs
 import getpass
-import locale
 import logging
 import os.path
 import re
-import shutil
 import socket
-import sys
 import uuid
 from typing import Dict, Optional, List
 
@@ -26,7 +23,11 @@ logger = logging.getLogger(__name__)
 
 class ShellService:
     """Shell命令服务"""
-    active_shells: Dict[str, Shell] = {}
+    active_shells: Dict[str, Shell]
+
+    def __init__(self) -> None:
+        self.active_shells = {}
+
 
     @classmethod
     def _get_display_path(cls, path: str) -> str:
@@ -49,35 +50,10 @@ class ShellService:
     @classmethod
     async def _create_process(cls, exec_dir: str, command: str) -> asyncio.subprocess.Process:
         """根据传递的执行目录+命令创建一个asyncio管理的子进程"""
-        # 1.根据不同的系统选择不同的解释器
+        # 1.ubuntu系统统一使用/bin/bash这个解释器
         logger.debug(f"在目录 {exec_dir} 下使用命令 {command} 创建一个子进程")
-        if sys.platform == "win32":
-            # 2.Windows下优先查找powershell是否存在
-            shell_exec = shutil.which("powershell")
-            if shell_exec:
-                # 3.使用create_subprocess_exec手动拼接启动参数，
-                # -NoProfile/-NonInteractive可将powershell冷启动时间从约5.7s降到约1.5s，
-                # 避免光启动进程就耗光exec_command的同步等待时间
-                # 注意不能加-NonInteractive: 交互式提示(如curl别名等待输入Uri)需要
-                # 挂起等待stdin, 从而让接口返回running状态, 与真实命令行行为一致
-                return await asyncio.create_subprocess_exec(
-                    shell_exec, "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-Command", command,
-                    cwd=exec_dir,  # 执行目录
-                    stdout=asyncio.subprocess.PIPE,  # 创建管道以捕获标准输出
-                    stderr=asyncio.subprocess.STDOUT,  # 将标准错误重定向到标准输出流
-                    stdin=asyncio.subprocess.PIPE,  # 创建管道以允许标准输入
-                    limit=1024 * 1024,  # 设置缓冲区大小 限制为1mb
-                )
-            # 4.找不到powershell则回退到cmd
-            shell_exec = shutil.which("cmd")
-        else:
-            shell_exec = None
-            if os.path.exists("/bin/bash"):
-                shell_exec = "/bin/bash"
-            elif os.path.exists("/bin/zsh"):
-                shell_exec = "/bin/zsh"
-        # 5.创建一个系统级的子进程用来执行shell命令
+        shell_exec = "/bin/bash"
+        # 2.创建一个系统级的子进程用来执行shell命令
         return await asyncio.create_subprocess_shell(
             cmd=command,  # 要执行的命令
             executable=shell_exec,  # 执行解释器
@@ -90,13 +66,9 @@ class ShellService:
 
     async def _start_output_reader(self, session_id: str, process: asyncio.subprocess.Process) -> None:
         """启动协程以连续读取进程输出并将其存储到会话中"""
-        # 1.动态确定系统编码
+        # 1.ubuntu系统统一使用utf-8编码
         logger.debug(f"正在启用会话输出读取器: {session_id}")
-        if sys.platform == "win32":
-            encoding = "gb18030"  # gb18030比gbk支持的生僻字更多, 且兼容gbk
-        else:
-            encoding = "utf-8"
-
+        encoding = "utf-8"
         # 2.创建增量编码器解决字符被切断的问题
         decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
         shell = self.active_shells.get(session_id)
@@ -243,7 +215,7 @@ class ShellService:
                     )],
                 )
                 # 5.创建后台任务来运行输出读取器
-                asyncio.create_task(self._start_output_reader(session_id, process))
+                await asyncio.create_task(self._start_output_reader(session_id, process))
             else:
                 # 6.该会话已存在则读取数据
                 logger.debug(f"使用现有的Shell会话: {session_id}")
@@ -272,7 +244,7 @@ class ShellService:
                     output="",
                 ))
                 # 12.创建后台任务来运行输出读取器
-                asyncio.create_task(self._start_output_reader(session_id, process))
+                await asyncio.create_task(self._start_output_reader(session_id, process))
 
             try:
                 # 13.尝试等待子进程执行(最多等待10s, 需给Windows下powershell启动开销留出余量)
@@ -328,13 +300,9 @@ class ShellService:
             if process.returncode is not None:
                 logger.error(f"子进程已结束,无法写入输入: {session_id}")
                 raise BadRequestException("子进程已结束,无法写入输入")
-            # 4.确认系统编码(如果你的系统是linux这步可以不做，可以直接强制使用utf-8)
-            if sys.platform == "win32":
-                encoding = locale.getpreferredencoding()
-                line_ending = "\r\n"
-            else:
-                encoding = "utf-8"
-                line_ending = "\n"
+            # 4.ubuntu系统统一使用utf-8与\n
+            encoding = "utf-8"
+            line_ending = "\n"
             # 5.准备要发送的内容
             text_to_send = input_text
             if press_enter:
