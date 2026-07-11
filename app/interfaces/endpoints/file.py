@@ -4,7 +4,7 @@ from app.interfaces.schemas.base import Response
 from app.interfaces.schemas.file import FileReadRequest, FileWriteRequest, FileReplaceRequest, FileSearchRequest, \
     FileFindRequest
 from app.interfaces.service_dependencies import get_file_service
-from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult
+from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult
 from app.services.file import FileService
 
 router = APIRouter(prefix="/file", tags=["File模块"])
@@ -95,12 +95,12 @@ async def search_in_file(
 
 @router.post(
     path="/find-files",
-    response_model=Response[FileFindRequest],
+    response_model=Response[FileFindResult],
 )
 async def find_files(
         request: FileFindRequest,
         file_service: FileService = Depends(get_file_service),
-) -> Response[FileFindRequest]:
+) -> Response[FileFindResult]:
     """根据传递的文件夹+glob文件规则查找文件列表"""
     result = await file_service.find_files(
         dir_path=request.dir_path,
