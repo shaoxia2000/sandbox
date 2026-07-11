@@ -1,10 +1,12 @@
 import asyncio
+import glob
 import logging
 import os.path
+import re
 from typing import Optional
 
 from app.interfaces.errors.exceptions import NotFoundException, BadRequestException, AppException
-from app.models.file import FileReadResult, FileWriteResult
+from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ class FileService:
             start_line: Optional[int] = None,
             end_line: Optional[int] = None,
             sudo: bool = False,
-            max_length: int = 10000,
+            max_length: Optional[int] = 10000,
     ) -> FileReadResult:
         """根据传递的文件路径+起始结束行号+权限+最大长度读取文件内容"""
         # 1.检测在当前权限下能否获取该文件
@@ -141,3 +143,76 @@ class FileService:
             if isinstance(e, BadRequestException):
                 raise
             raise AppException(f"文件内容写入失败: {str(e)}")
+
+    async def replace_in_file(
+            self,
+            filepath: str,
+            old_str: str,
+            new_str: str,
+            sudo: bool = False,
+    ) -> FileReplaceResult:
+        """根据传递的数据替换文件内指定的内容"""
+        # 1.调用服务获取对应的文件内容
+        file_read_result = await self.read_file(filepath=filepath, sudo=sudo, max_length=None)
+        content = file_read_result.content
+        # 2.计算old_str出现的次数, 只有出现次数>0才需要替换
+        replaced_count = content.count(old_str)
+        if replaced_count == 0:
+            return FileReplaceResult(filepath=filepath, replaced_count=replaced_count)
+        # 3.替换旧内容
+        new_content = content.replace(old_str, new_str)
+        # 4.将替换后的新内容写入到文件中
+        await self.write_file(filepath=filepath, content=new_content, sudo=sudo)
+        return FileReplaceResult(filepath=filepath, replaced_count=replaced_count)
+
+    async def search_in_file(
+            self,
+            filepath: str,
+            regex: str,
+            sudo: bool = False,
+    ) -> FileSearchResult:
+        """根据传递的文件路径+匹配规则查询文件内符合的内容"""
+        # 1.调用服务获取对应的文件内容
+        file_read_result = await self.read_file(filepath=filepath, sudo=sudo, max_length=None)
+        content = file_read_result.content
+        # 2.将读取的内容拆分成每一行
+        lines = content.splitlines()
+        matches = []
+        line_numbers = []
+        # 3.将外部传递的regex转换为正则
+        try:
+            pattern = re.compile(regex)
+        except Exception as e:
+            raise BadRequestException(f"传递正则表达式[{regex}]出错: {str(e)}]")
+
+        # 4.创建一个异步函数, 使用子线程方式执行避免长时间io阻塞
+        def async_matches():
+            nonlocal matches, line_numbers
+            for idx, line in enumerate(lines):
+                if pattern.match(line):
+                    matches.append(line)
+                    line_numbers.append(idx)
+
+        # 5.使用asyncio创建子线程并调用
+        await asyncio.to_thread(async_matches)
+        return FileSearchResult(
+            filepath=filepath,
+            matches=matches,
+            line_numbers=line_numbers,
+        )
+
+    @classmethod
+    async def find_files(cls, dir_path: str, glob_pattern: str) -> FileFindResult:
+        """根据传递的文件夹路径+glob规则查询文件列表"""
+        # 1.检测下传递进来的目录是否存在
+        if not os.path.exists(dir_path):
+            raise NotFoundException(f"当前文件夹不存在: {dir_path}")
+
+        # 2.定义一个异步函数使用asyncio子线程执行，避免io阻塞
+        def async_glob():
+            search_pattern = os.path.join(dir_path, glob_pattern)
+            return glob.glob(search_pattern, recursive=True)
+
+        # 3.创建子线程执行函数
+        files = await asyncio.to_thread(async_glob)
+        return FileFindResult(dir_path=dir_path, files=files)
