@@ -32,3 +32,22 @@ class FileFindResult(BaseModel):
     """文件查找结果"""
     dir_path: str = Field(..., description="搜索的目录绝对路径")
     files: List[str] = Field(default_factory=list, description="检索到的文件列表")
+
+
+class FileUploadResult(BaseModel):
+    """文件上传结果"""
+    filepath: str = Field(..., description="上传文件的绝对路径")
+    file_size: int = Field(default=0, description="上传文件的大小, 单位为字节")
+    success: bool = Field(..., description="是否上传成功")
+
+
+class FileCheckResult(BaseModel):
+    """文件检查是否存在结果"""
+    filepath: str = Field(..., description="需要检查文件的绝对路径")
+    exists: bool = Field(..., description="文件是否存在")
+
+
+class FileDeleteResult(BaseModel):
+    """文件删除结果模型"""
+    filepath: str = Field(..., description="需要删除文件的绝对路径")
+    deleted: bool = Field(..., description="文件是否删除成功")

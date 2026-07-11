@@ -5,8 +5,11 @@ import os.path
 import re
 from typing import Optional
 
+from fastapi import UploadFile
+
 from app.interfaces.errors.exceptions import NotFoundException, BadRequestException, AppException
-from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult
+from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult, \
+    FileUploadResult, FileCheckResult, FileDeleteResult
 
 logger = logging.getLogger(__name__)
 
@@ -216,3 +219,62 @@ class FileService:
         # 3.创建子线程执行函数
         files = await asyncio.to_thread(async_glob)
         return FileFindResult(dir_path=dir_path, files=files)
+
+    @classmethod
+    async def upload_file(cls, file: UploadFile, filepath: str) -> FileUploadResult:
+        """根据传递的文件源+路径, 将文件上传至沙箱"""
+        try:
+            # 1.定义分块上传, 每次只上传8k
+            chunk_size = 1024 * 8
+            file_size = 0
+            # 2.确保上传文件所在的目录存在
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+            # 3.定义一个异步函数用于上传文件避免io阻塞
+            def async_write_file():
+                nonlocal file_size
+                with open(filepath, mode="wb") as f:
+                    while True:
+                        chunk = file.file.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        file_size += len(chunk)
+
+            # 4.使用asyncio子线程完成函数调用
+            await asyncio.to_thread(async_write_file)
+            return FileUploadResult(
+                filepath=filepath,
+                file_size=file_size,
+                success=True,
+            )
+
+        except Exception as e:
+            logger.error(f"将文件上传至沙箱出错: {str(e)}")
+            raise AppException(f"将文件上传至沙箱出错: {str(e)}")
+
+    @classmethod
+    async def ensure_file(cls, filepath: str) -> None:
+        """传递filepath用于确保当前文件存在"""
+        if not os.path.exists(filepath):
+            raise NotFoundException(f"该文件不存在: {filepath}")
+
+    @classmethod
+    async def check_file_exists(cls, filepath: str) -> FileCheckResult:
+        """根据传递的路径判断文件是否存在"""
+        return FileCheckResult(
+            filepath=filepath,
+            exists=os.path.exists(filepath),
+        )
+
+    async def delete_file(self, filepath: str) -> FileDeleteResult:
+        """根据传递的路径删除文件"""
+        # 1.判断文件是否存在
+        await self.ensure_file(filepath)
+        try:
+            # 2.调用命令删除文件
+            os.remove(filepath)
+            return FileDeleteResult(filepath=filepath, deleted=True)
+        except Exception as e:
+            logger.error(f"删除文件{filepath}失败: {str(e)}")
+            raise AppException(f"删除文件{filepath}失败: {str(e)}")

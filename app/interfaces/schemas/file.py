@@ -41,3 +41,13 @@ class FileFindRequest(BaseModel):
     """文件查找请求结构体"""
     dir_path: str = Field(..., description="搜索的目录绝对路径")
     glob_pattern: str = Field(..., description="文件名模式(glob语法)")
+
+
+class FileCheckRequest(BaseModel):
+    """检查文件是否存在请求结构体"""
+    filepath: str = Field(..., description="要检查是否存在的文件绝对路径")
+
+
+class FileDeleteRequest(BaseModel):
+    """删除文件请求结构体"""
+    filepath: str = Field(..., description="要删除的文件绝对路径")

@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends
+import os.path
+
+from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse
 
 from app.interfaces.schemas.base import Response
 from app.interfaces.schemas.file import FileReadRequest, FileWriteRequest, FileReplaceRequest, FileSearchRequest, \
-    FileFindRequest
+    FileFindRequest, FileCheckRequest, FileDeleteRequest
 from app.interfaces.service_dependencies import get_file_service
-from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult
+from app.models.file import FileReadResult, FileWriteResult, FileReplaceResult, FileSearchResult, FileFindResult, \
+    FileUploadResult, FileCheckResult, FileDeleteResult
 from app.services.file import FileService
 
 router = APIRouter(prefix="/file", tags=["File模块"])
@@ -108,5 +112,79 @@ async def find_files(
     )
     return Response.success(
         msg=f"查找完毕, 检索到{len(result.files)}个文件",
+        data=result,
+    )
+
+
+@router.post(
+    path="/upload-file",
+    response_model=Response[FileUploadResult],
+)
+async def upload_file(
+        file: UploadFile = File(...),  # 上传的文件源
+        filepath: str = Form(None),  # 上传的文件路径
+        file_service: FileService = Depends(get_file_service),
+) -> Response[FileUploadResult]:
+    """根据传递的文件源+路径上传文件到沙箱"""
+    # 1.判断filepath是否传递, 如果没有则使用临时路径
+    if not filepath:
+        filepath = f"/tmp/{file.filename}"
+    # 2.调用服务将文件上传至沙箱
+    result = await file_service.upload_file(
+        file=file,
+        filepath=filepath,
+    )
+    return Response.success(
+        msg=f"文件上传成功",
+        data=result,
+    )
+
+
+@router.get(path="/download-file")
+async def download_file(
+        filepath: str,
+        file_service: FileService = Depends(get_file_service),
+) -> FileResponse:
+    """根据传递的filepath下载指定的文件"""
+    # 1.确保下当前文件存在
+    await file_service.ensure_file(filepath)
+    # 2.提取文件名字
+    filename = os.path.basename(filepath)
+    # 3.返回文件下载响应
+    return FileResponse(
+        path=filepath,
+        filename=filename,
+        media_type="application/octet-stream",
+    )
+
+
+@router.post(
+    path="/check-file-exists",
+    response_model=Response[FileCheckResult],
+)
+async def check_file_exists(
+        request: FileCheckRequest,
+        file_service: FileService = Depends(get_file_service),
+) -> Response[FileCheckResult]:
+    """根据传递的路径判断文件是否存在"""
+    result = await file_service.check_file_exists(filepath=request.filepath)
+    return Response.success(
+        msg="文件存在" if result.exists else "文件不存在",
+        data=result,
+    )
+
+
+@router.post(
+    path="/delete-file",
+    response_model=Response[FileDeleteResult],
+)
+async def delete_file(
+        request: FileDeleteRequest,
+        file_service: FileService = Depends(get_file_service),
+) -> Response[FileDeleteResult]:
+    """根据传递的文件路径删除指定的文件"""
+    result = await file_service.delete_file(filepath=request.filepath)
+    return Response.success(
+        msg=f"文件删除成功",
         data=result,
     )
