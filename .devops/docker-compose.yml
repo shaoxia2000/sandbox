@@ -4,9 +4,9 @@ services:
     build:
       context: ../
       dockerfile: .devops/Dockerfile
-    # 将当前目录挂载到工作空间 /workspace
+    # 将当前目录挂载到工作空间 /sandbox
     volumes:
-      - ../:/workspace
+      - ../:/sandbox
     # 端口映射
     ports:
       - "2222:22" # 本地 2222->容器SSH 22

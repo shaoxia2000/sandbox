@@ -1,13 +1,14 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV HOSTNAME=sandbox
 ENV UV_PROJECT_ENVIRONMENT="/venv"
 ENV UV_LINK_MODE=copy
 
 # 1.安装基础工具+OpenSSH Server
 # mkdir /var/run/sshd是ssh服务启动必须的目录
 RUN apt-get update && apt-get install -y \
-    ca-certificates git curl openssh-server supervisor\
+    ca-certificates git curl openssh-server \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir /var/run/sshd
 
@@ -15,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 RUN echo 'root:root' | chpasswd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 
-# 3.安装uv \
+# 3.安装uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # 4.设置工作环境

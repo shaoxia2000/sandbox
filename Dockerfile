@@ -1,0 +1,73 @@
+# 1.使用ubuntu基础镜像来源
+FROM ubuntu:22.04
+
+# 2.安装过程中避免交互式提示并设置主机名
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOSTNAME=sandbox
+
+# 3.将ubuntu默认的apt软件源地址统一换成阿里云镜像源
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://ports.ubuntu.com/ubuntu-ports/|http://mirrors.aliyun.com/ubuntu-ports/|g' /etc/apt/sources.list
+
+# 4.更新和安装基础软件后移除依赖
+RUN apt-get update && apt-get install -y \
+    sudo bc curl wget pnupg software-properties-common supervisor \
+    xterm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5.创建ubuntu用户并赋予sudo权限
+RUN useradd -m -d /home/ubuntu -s /bin/bash ubuntu && \
+    echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu
+
+# 6 安装python3.12版本
+RUN add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y \
+    python3.12 \
+    python3.12-venv \
+    python3.12-dev \
+    python3-pip && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 7.为pip3配置阿里云镜像源
+RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+# 8.安装 node.js 24.12.0 (LTS)
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
+    apt-get install -y nodejs=24.12.0-1nodesource1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 9.将npm镜像源设置为阿里云镜像源
+RUN npm config set registry https://registry.npmmirror.com
+
+# 10.设置工作空间
+WORKDIR /sandbox
+
+# 11.拷贝项目依赖文件到工作空间并安装依赖
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 12.拷贝整个项目文件
+COPY . .
+
+# 13.将supervisord.conf 拷贝到supervisor服务的配置目录中
+COPY supervisord.conf /etc/supervisor/conf.d/sandbox.conf
+
+# 14.暴露端口: 8080(FastAPI) 9222(CDP) 5900(VNC) 5901(Websocket)
+EXPOSE 8080 9222 5900 5901
+
+# 15.额外的一些环境变量
+
+# 16.使用supervisor管理所有进程
+CMD ["supervisord", "-n", "-c", "/sandbox/supervisord.conf"]
+
+
+
