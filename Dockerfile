@@ -13,7 +13,7 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu
 # 4.更新和安装基础软件后移除依赖
 RUN apt-get update && apt-get install -y \
     sudo bc curl wget pnupg software-properties-common supervisor \
-    xterm \
+    xterm socat \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
