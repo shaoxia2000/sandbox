@@ -8,9 +8,9 @@
 import asyncio
 import logging
 import socket
-import xmlrpc
-
-import http
+import http.client
+import xmlrpc.client
+from functools import partial
 from typing import List, Any
 
 from app.interfaces.errors.exceptions import BadRequestException, AppException
@@ -42,6 +42,8 @@ class UnixStreamTransport(xmlrpc.client.Transport):
         self.socket_path = socket_path
 
     def make_connection(self, host) -> http.client.HTTPConnection:
+        # host 可能是 str，也可能是 (host, x509) 元组，需先解析
+        host, _extra_headers, _x509 = self.get_host_info(host)
         return UnixStreamHTTPConnection(host, self.socket_path)
 
 
@@ -68,7 +70,7 @@ class SupervisorService:
     async def _call_rpc(cls, method, *args) -> Any:
         """根据传递的方法+参数 调用rpc方法"""
         try:
-            return await asyncio.to_thread(method, *args)
+            return await asyncio.to_thread(partial(method, *args))
         except Exception as e:
             logger.error(f"RPC方法调用失败: {str(e)}")
             raise BadRequestException(f"RPC方法调用失败: {str(e)}")
@@ -76,8 +78,8 @@ class SupervisorService:
     async def get_all_processes(self) -> List[ProcessInfo]:
         """获取当前supervisor管理的所有进程信息"""
         try:
-           processes = await self._call_rpc(self.server.supervisor.getAllProcessInfo)
-           return [ProcessInfo(**process) for process in processes]
+            processes = await self._call_rpc(self.server.supervisor.getAllProcessInfo)
+            return [ProcessInfo(**process) for process in processes]
         except Exception as e:
             logger.error(f"获取进程信息失败: {str(e)}")
             raise AppException(f"获取进程信息失败: {str(e)}")
