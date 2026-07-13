@@ -48,25 +48,48 @@ RUN mkdir -p /etc/apt/keyrings && \
 # 9.将npm镜像源设置为阿里云镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
-# 10.设置工作空间
+# 10.安装 Google Chrome 浏览器
+RUN add-apt-repositry ppa:xtradeb/apps -y && \
+    apt-get update && \
+    apt-get install -y chromium --no-install-recomments && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 11.安装中文字体和语言支持
+RUN apt-get update && apt-get install -y \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    language-pack-zh-hans \
+    locales \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 12.设置默认编码
+ENV LANG=zh_CN.UTF-8 \
+    LANGUAGE=zh_CN:zh \
+    LC_ALL=zh_CN:UTF-8
+
+
+# 13.设置工作空间
 WORKDIR /sandbox
 
-# 11.拷贝项目依赖文件到工作空间并安装依赖
+# 14.拷贝项目依赖文件到工作空间并安装依赖
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# 12.拷贝整个项目文件
+# 15.拷贝整个项目文件
 COPY . .
 
-# 13.将supervisord.conf 拷贝到supervisor服务的配置目录中
+# 16.将supervisord.conf 拷贝到supervisor服务的配置目录中
 COPY supervisord.conf /etc/supervisor/conf.d/sandbox.conf
 
-# 14.暴露端口: 8080(FastAPI) 9222(CDP) 5900(VNC) 5901(Websocket)
+# 17.暴露端口: 8080(FastAPI) 9222(CDP) 5900(VNC) 5901(Websocket)
 EXPOSE 8080 9222 5900 5901
 
-# 15.额外的一些环境变量
+# 18.额外的一些环境变量
+ENV ENV_CHROME_ARGS=""
 
-# 16.使用supervisor管理所有进程
+# 19.使用supervisor管理所有进程
 CMD ["supervisord", "-n", "-c", "/sandbox/supervisord.conf"]
 
 
