@@ -12,7 +12,7 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu
 
 # 4.更新和安装基础软件后移除依赖
 RUN apt-get update && apt-get install -y \
-    sudo bc curl wget pnupg software-properties-common supervisor \
+    sudo bc curl wget gnupg software-properties-common supervisor \
     xterm socat xvfb x11vnc websockify \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -21,15 +21,15 @@ RUN apt-get update && apt-get install -y \
 RUN useradd -m -d /home/ubuntu -s /bin/bash ubuntu && \
     echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu
 
-# 6 安装python3.12版本
+# 6 安装python3.10版本
 RUN add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y \
-    python3.12 \
-    python3.12-venv \
-    python3.12-dev \
+    python3.10 \
+    python3.10-venv \
+    python3.10-dev \
     python3-pip && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -48,10 +48,10 @@ RUN mkdir -p /etc/apt/keyrings && \
 # 9.将npm镜像源设置为阿里云镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
-# 10.安装 Google Chrome 浏览器
-RUN add-apt-repositry ppa:xtradeb/apps -y && \
+# 10.安装 Chromium 浏览器
+RUN add-apt-repository ppa:xtradeb/apps -y && \
     apt-get update && \
-    apt-get install -y chromium --no-install-recomments && \
+    apt-get install -y chromium --no-install-recommends && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -60,14 +60,14 @@ RUN apt-get update && apt-get install -y \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
     language-pack-zh-hans \
-    locales \
+    locales && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # 12.设置默认编码
 ENV LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
-    LC_ALL=zh_CN:UTF-8
+    LC_ALL=zh_CN.UTF-8
 
 
 # 13.设置工作空间
@@ -86,8 +86,9 @@ COPY supervisord.conf /etc/supervisor/conf.d/sandbox.conf
 # 17.暴露端口: 8080(FastAPI) 9222(CDP) 5900(VNC) 5901(Websocket)
 EXPOSE 8080 9222 5900 5901
 
-# 18.额外的一些环境变量
-ENV ENV_CHROME_ARGS=""
+# 18.额外的一些环境变量（supervisord 用 %(ENV_xxx)s 引用，此处变量名不要再带 ENV_ 前缀）
+ENV CHROME_ARGS=""
+ENV UVI_ARGS=""
 
 # 19.使用supervisor管理所有进程
 CMD ["supervisord", "-n", "-c", "/sandbox/supervisord.conf"]

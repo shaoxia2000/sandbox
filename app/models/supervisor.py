@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class ProcessInfo(BaseModel):
     """进程信息模型"""
     name: str = Field(..., description="进程名字")
@@ -15,4 +16,4 @@ class ProcessInfo(BaseModel):
     logfile: str = Field(..., description="日志文件")
     stdout_logfile: str = Field(..., description="标准输出日志文件")
     stderr_logfile: str = Field(..., description="标准错误日志文件")
-    pid: str = Field(..., description="进程id(Process ID)")
+    pid: int = Field(..., description="进程id(Process ID)")
