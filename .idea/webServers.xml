@@ -3,7 +3,7 @@
   <component name="WebServers">
     <option name="servers">
       <webServer id="7272601b-b171-4a44-b71f-3f5692f0ccf3" name="沙箱-生产">
-        <fileTransfer rootFolder="/app/sandbox_prod" accessType="SFTP" host="192.168.0.198" port="22" sshConfigId="7e3dc619-73a0-40eb-89f7-61c9b4549513" sshConfig="root@192.168.0.198:22 password">
+        <fileTransfer rootFolder="/app/sandbox_prod" accessType="SFTP" host="192.168.1.198" port="22" sshConfigId="7e3dc619-73a0-40eb-89f7-61c9b4549513" sshConfig="root@192.168.1.198:22 password">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>
